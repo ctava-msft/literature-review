@@ -21,7 +21,7 @@ required_vars = [
     "AZURE_AISEARCH_INDEX",
     "MODEL_CHAT_DEPLOYMENT_NAME",
     "MODEL_EMBEDDINGS_DEPLOYMENT_NAME",
-    "SYSTEM_MESSAGE"
+    "AZURE_AISYSTEM_MESSAGE"
 ]
  
 for var in required_vars:
@@ -49,7 +49,7 @@ def generate_embeddings(text):
         return response.json()['data'][0]['embedding']
     except requests.exceptions.RequestException as e:
         logger.error(f"Error generating embeddings: {e.response.text}")
-        raise
+        raise e
  
 def query_azure_search(query, search_type='vector'):
     try:
@@ -67,16 +67,10 @@ def query_azure_search(query, search_type='vector'):
             results = search_client.search(
                 search_text=None,
                 vector_queries=[v_query],
-                select=["document_num", "page_num", "chunk_num", "chunk_begin", "chunk_end", "chunk", "url"],
+                select=["chunk", "url"], # need to fix the chunk here when not sick, I get this error: Message: Invalid expression: Could not find a property named 'chunk' on type 'search.document'.
                 top=20
             )
-        # elif search_type == 'hybrid':
-        #     results = search_client.search(
-        #         search_text=query,
-        #         vector_queries=[v_query],
-        #         select=["chunk_id", "parent_id", "chunk", "title"],
-        #         top=20
-        #     )
+        
         else:
             raise ValueError("Invalid search type. Use 'vector' or 'hybrid'.")
        
@@ -94,7 +88,7 @@ def query_azure_openai(prompt, search_results):
    
     payload = {
         "messages": [
-            {"role": "system", "content": f"""{os.getenv("SYSTEM_MESSAGE")}"""},
+            {"role": "system", "content": f"""{os.getenv("AZURE_AISYSTEM_MESSAGE")}"""},
             {"role": "user", "content": f"Based on the following search results, please answer this question: {prompt}\n\nSearch Results: {content[:4000]}"}
         ],
         "max_tokens": 1000,
@@ -127,11 +121,7 @@ def save_to_markdown(query, vector_results, hybrid_results, answer, filename="ou
            
             f.write("## Search Results\n\n")
             for result in vector_results:
-                f.write(f"Doc Num: {result['document_num']}\n")
                 f.write(f"Page Num: {result['page_num']}\n")
-                f.write(f"Chunk Num: {result['chunk_num']}\n")
-                f.write(f"Chunk Begin: {result['chunk_begin']}\n")
-                f.write(f"Chunk End: {result['chunk_end']}\n")
                 f.write(f"Chunk: {result['chunk'][:100]}...\n")
                 f.write(f"URL: {result['url']}\n")
                 f.write(f"Score: {result['@search.score']}\n\n")
@@ -152,7 +142,7 @@ def save_to_markdown(query, vector_results, hybrid_results, answer, filename="ou
 def main():
     logger.info("Starting query script execution.")
     print("Ready to accept your question.")
-    query = input("Enter your question: ")
+    query = input("Enter the drug name: ")
     print("", flush=True)
    
     if query:
